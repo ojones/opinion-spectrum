@@ -81,6 +81,7 @@ jobs:
         env:
           FACTORY_APP_SECRETS: declared
           # factory-secrets:begin
+          STATEMENTS_API_KEY: ${{ secrets.STATEMENTS_API_KEY }}
           # factory-secrets:end
         run: |
           names=$(jq -r '.secrets[]?.name' secrets.json)
