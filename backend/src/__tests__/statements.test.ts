@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { DatabaseSync } from "node:sqlite";
 import { createApp } from "../app";
@@ -109,6 +109,48 @@ describe("authorization", () => {
       const res = await request(app).get("/v1/research-runs/x").set("authorization", "Bearer nope");
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe("unauthorized");
+    });
+  });
+
+  it("fails closed with 401 when STATEMENTS_API_KEY is unset", async () => {
+    const { service } = makeService();
+    const saved = process.env.STATEMENTS_API_KEY;
+    delete process.env.STATEMENTS_API_KEY;
+    try {
+      await withFlag("issue-158", true, async () => {
+        const app = createApp({ statementsService: service });
+        const res = await request(app).get("/v1/research-runs/x").set("authorization", "Bearer any-value");
+        expect(res.status).toBe(401);
+        expect(res.body.error.code).toBe("unauthorized");
+      });
+    } finally {
+      process.env.STATEMENTS_API_KEY = saved;
+    }
+  });
+
+  it("never logs or returns the API key", async () => {
+    const { service, wikipedia } = makeService();
+    wikipedia.handler = async () => [result()];
+    await withFlag("issue-158", true, async () => {
+      const logged: string[] = [];
+      const spy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+        logged.push(args.map(String).join(" "));
+      });
+      try {
+        const app = createApp({ statementsService: service });
+        const res = await request(app)
+          .post("/v1/research-runs")
+          .set("authorization", AUTH)
+          .send({ person: "Ada Lovelace", question: "What did she publish?" });
+        await waitForRun(service, res.body.id);
+        expect(res.text).not.toContain(KEY);
+        expect(logged.length).toBeGreaterThan(0);
+        for (const line of logged) {
+          expect(line).not.toContain(KEY);
+        }
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 
