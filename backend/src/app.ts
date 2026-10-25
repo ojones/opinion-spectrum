@@ -2,7 +2,10 @@ import path from "node:path";
 import express, { type Express } from "express";
 import { logger } from "./logger";
 import { healthRouter } from "./routes/health";
-import { previewMiddleware } from "./feature-flags";
+import { isFeatureEnabled, previewMiddleware } from "./feature-flags";
+import { getStatementsService } from "./statements";
+import { mountStatements } from "./statements/routes";
+import type { StatementsService } from "./statements/service";
 
 // The built frontend lives at ../../frontend/dist relative to this file's
 // compiled location (dist/app.js -> backend/dist -> backend/.. -> frontend/dist).
@@ -13,7 +16,7 @@ const FRONTEND_DIST = process.env.FRONTEND_DIST_PATH
   ? path.resolve(process.env.FRONTEND_DIST_PATH)
   : DEFAULT_FRONTEND_DIST;
 
-export function createApp(): Express {
+export function createApp(options: { statementsService?: StatementsService } = {}): Express {
   const app = express();
 
   // Fly terminates TLS in front of the app; trusting one proxy hop makes
@@ -37,6 +40,11 @@ export function createApp(): Express {
 
   // Health checks (Fly's included) answer before anything else is mounted.
   app.use(healthRouter);
+
+  // The statements API is one change behind one flag, checked here, once.
+  const injected = options.statementsService;
+  const statementsService: () => StatementsService = injected ? () => injected : getStatementsService;
+  app.use(mountStatements((res) => isFeatureEnabled(res, "issue-158"), statementsService));
 
   // One container: the backend serves the built frontend's static assets
   // itself — no separate frontend server.
