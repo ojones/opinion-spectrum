@@ -11,3 +11,9 @@ export const healthRouter = Router();
 healthRouter.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+// The statements API's contract names the open health path /health; the
+// starter's /api/health stays for the frontend. Neither is behind the API key.
+healthRouter.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});

@@ -72,7 +72,10 @@ describe("flag gating", () => {
     const { service } = makeService();
     await withFlag("issue-158", false, async () => {
       const app = createApp({ statementsService: service });
-      const res = await request(app).get("/v1/research-runs/anything").set("authorization", AUTH);
+      const res = await request(app)
+        .post("/v1/research-runs")
+        .set("authorization", AUTH)
+        .send({ person: "Ada Lovelace", question: "What did she publish?" });
       expect(res.status).toBe(404);
     });
   });
@@ -106,6 +109,15 @@ describe("authorization", () => {
       const res = await request(app).get("/v1/research-runs/x").set("authorization", "Bearer nope");
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe("unauthorized");
+    });
+  });
+
+  it("keeps /health open, without a key", async () => {
+    await withFlag("issue-158", true, async () => {
+      const app = createApp();
+      const res = await request(app).get("/health");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: "ok" });
     });
   });
 
